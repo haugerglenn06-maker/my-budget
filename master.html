@@ -1,35 +1,99 @@
 <!DOCTYPE html>
-<html>
+<html lang="sv">
     <head>
-        <title>Master Budget - Local First</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Budget Master - Databas</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     </head>
-    <body class="bg-gray-100 p-8">
-        <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-md">
-            <h1 class="text-2xl font-bold mb-4">Mina Inköp (Master)</h1>
-            <div
-                id="status"
-                class="mb-4 p-2 bg-blue-100 text-blue-800 rounded text-sm"
-            >
-                Initialiserar...
-            </div>
+    <body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-8">
+        <div class="max-w-4xl mx-auto">
+            <header class="mb-8 border-b border-slate-700 pb-4">
+                <h1 class="text-3xl font-bold text-blue-400">Budget Master</h1>
+                <p class="text-slate-400">
+                    Lokal lagring i IndexedDB | Ingen molnlagring
+                </p>
+            </header>
 
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="border-b">
-                        <th class="py-2">Vara</th>
-                        <th class="py-2">Pris</th>
-                    </tr>
-                </thead>
-                <tbody id="purchase-list"></tbody>
-            </table>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-1 space-y-4">
+                    <div
+                        class="bg-slate-800 p-4 rounded-xl border border-slate-700"
+                    >
+                        <h2 class="font-bold mb-2">Anslutningsstatus</h2>
+                        <div
+                            id="status-badge"
+                            class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-yellow-500 text-yellow-900 mb-2"
+                        >
+                            Initialiserar...
+                        </div>
+                        <p class="text-sm text-slate-400 mb-2">
+                            Ditt Master ID:
+                        </p>
+                        <code
+                            id="display-id"
+                            class="block bg-black p-2 rounded text-blue-400 font-mono text-center"
+                            >Laddar...</code
+                        >
+                    </div>
+
+                    <div
+                        class="bg-slate-800 p-4 rounded-xl border border-slate-700"
+                    >
+                        <h2
+                            class="font-bold mb-2 text-sm uppercase text-slate-500"
+                        >
+                            Logg
+                        </h2>
+                        <div
+                            id="debug-log"
+                            class="text-[10px] font-mono h-32 overflow-y-auto text-slate-400 bg-black p-2 rounded"
+                        >
+                            > System startat...
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    class="md:col-span-2 bg-slate-800 p-6 rounded-xl border border-slate-700"
+                >
+                    <h2 class="text-xl font-bold mb-4">Senaste Inköpen</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr
+                                    class="border-b border-slate-700 text-slate-500 text-sm"
+                                >
+                                    <th class="py-2">Vara</th>
+                                    <th class="py-2">EAN / Kod</th>
+                                    <th class="py-2 text-right">Pris</th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="purchase-list"
+                                class="divide-y divide-slate-700"
+                            ></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <script>
-            // 1. Setup Databas (IndexedDB)
-            const dbRequest = indexedDB.open("BudgetData", 1);
+            // --- KONFIGURATION ---
+            // Välj ett unikt ID här. Om du delar detta med någon, byt ut 'min-budget' mot något eget.
+            const MASTER_ID = "lagerstigen-11";
+
+            const log = (msg) => {
+                const el = document.getElementById("debug-log");
+                el.innerHTML += `<div>> ${msg}</div>`;
+                el.scrollTop = el.scrollHeight;
+            };
+
+            // --- INDEXEDDB SETUP ---
             let db;
+            const dbRequest = indexedDB.open("BudgetDB", 1);
 
             dbRequest.onupgradeneeded = (e) => {
                 db = e.target.result;
@@ -37,45 +101,99 @@
                     keyPath: "id",
                     autoIncrement: true,
                 });
+                log("Databas skapad.");
             };
 
             dbRequest.onsuccess = (e) => {
                 db = e.target.result;
+                log("Databas redo.");
                 renderPurchases();
             };
 
-            // 2. Setup Mottagning (PeerJS)
-            // Vi skapar en mottagare som mobilen kan skicka till
-            const peer = new Peer(
-                "my-private-budget-id-" + Math.floor(Math.random() * 1000)
-            );
+            // --- PEERJS SETUP (KOMMUNIKATION) ---
+            // Vi lägger till STUN-servrar för att hantera brandväggar
+            const peer = new Peer(MASTER_ID, {
+                config: {
+                    iceServers: [
+                        { url: "stun:stun.l.google.com:19302" },
+                        { url: "stun:stun1.l.google.com:19302" },
+                    ],
+                },
+            });
 
             peer.on("open", (id) => {
-                document.getElementById("status").innerText =
-                    "Klar för mottagning! Koppla mobilen till ID: " + id;
+                document.getElementById("display-id").innerText = id;
+                document.getElementById("status-badge").className =
+                    "inline-block px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-green-900";
+                document.getElementById("status-badge").innerText =
+                    "Väntar på klient...";
+                log("Ansluten till Peer-nätverket.");
             });
 
             peer.on("connection", (conn) => {
+                log("Klient ansluter...");
+
+                conn.on("open", () => {
+                    log("Klient ansluten och redo!");
+                    document.getElementById("status-badge").innerText =
+                        "Klient Online";
+                });
+
                 conn.on("data", (data) => {
-                    // Spara mottagen data från mobilen till IndexedDB
-                    const transaction = db.transaction(
-                        ["purchases"],
-                        "readwrite"
-                    );
-                    transaction.objectStore("purchases").add(data);
-                    transaction.oncomplete = renderPurchases;
+                    log(`Mottog data: ${data.barcode}`);
+                    saveToDB(data);
+                });
+
+                conn.on("close", () => {
+                    log("Klient kopplade från.");
+                    document.getElementById("status-badge").innerText =
+                        "Väntar på klient...";
                 });
             });
+
+            peer.on("error", (err) => {
+                log(`FEL: ${err.type}`);
+                console.error(err);
+            });
+
+            // --- LOGIK FÖR ATT SPARA OCH VISA ---
+            function saveToDB(item) {
+                const transaction = db.transaction(["purchases"], "readwrite");
+                const store = transaction.objectStore("purchases");
+                store.add(item);
+                transaction.oncomplete = () => {
+                    log("Sparat i IndexedDB.");
+                    renderPurchases();
+                };
+            }
 
             function renderPurchases() {
                 const list = document.getElementById("purchase-list");
                 list.innerHTML = "";
-                db
+
+                const store = db
                     .transaction("purchases")
-                    .objectStore("purchases")
-                    .getAll().onsuccess = (e) => {
-                    e.target.result.forEach((item) => {
-                        list.innerHTML += `<tr class="border-b"><td>${item.name}</td><td>${item.price} kr</td></tr>`;
+                    .objectStore("purchases");
+                store.getAll().onsuccess = (e) => {
+                    const results = e.target.result;
+                    if (results.length === 0) {
+                        list.innerHTML =
+                            "<tr><td colspan='3' class='py-4 text-center text-slate-500'>Inga inköp ännu.</td></tr>";
+                        return;
+                    }
+
+                    results.reverse().forEach((item) => {
+                        list.innerHTML += `
+                        <tr class="text-sm">
+                            <td class="py-3">${item.name || "Okänd"}</td>
+                            <td class="py-3 font-mono text-slate-400">${
+                                item.barcode
+                            }</td>
+                            <td class="py-3 text-right">${
+                                item.price || 0
+                            } kr</td>
+                        </tr>
+                    `;
                     });
                 };
             }
