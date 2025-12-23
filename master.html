@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Master Budget - Local First</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    </head>
+    <body class="bg-gray-100 p-8">
+        <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-md">
+            <h1 class="text-2xl font-bold mb-4">Mina Inköp (Master)</h1>
+            <div
+                id="status"
+                class="mb-4 p-2 bg-blue-100 text-blue-800 rounded text-sm"
+            >
+                Initialiserar...
+            </div>
+
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b">
+                        <th class="py-2">Vara</th>
+                        <th class="py-2">Pris</th>
+                    </tr>
+                </thead>
+                <tbody id="purchase-list"></tbody>
+            </table>
+        </div>
+
+        <script>
+            // 1. Setup Databas (IndexedDB)
+            const dbRequest = indexedDB.open("BudgetData", 1);
+            let db;
+
+            dbRequest.onupgradeneeded = (e) => {
+                db = e.target.result;
+                db.createObjectStore("purchases", {
+                    keyPath: "id",
+                    autoIncrement: true,
+                });
+            };
+
+            dbRequest.onsuccess = (e) => {
+                db = e.target.result;
+                renderPurchases();
+            };
+
+            // 2. Setup Mottagning (PeerJS)
+            // Vi skapar en mottagare som mobilen kan skicka till
+            const peer = new Peer(
+                "my-private-budget-id-" + Math.floor(Math.random() * 1000)
+            );
+
+            peer.on("open", (id) => {
+                document.getElementById("status").innerText =
+                    "Klar för mottagning! Koppla mobilen till ID: " + id;
+            });
+
+            peer.on("connection", (conn) => {
+                conn.on("data", (data) => {
+                    // Spara mottagen data från mobilen till IndexedDB
+                    const transaction = db.transaction(
+                        ["purchases"],
+                        "readwrite"
+                    );
+                    transaction.objectStore("purchases").add(data);
+                    transaction.oncomplete = renderPurchases;
+                });
+            });
+
+            function renderPurchases() {
+                const list = document.getElementById("purchase-list");
+                list.innerHTML = "";
+                db
+                    .transaction("purchases")
+                    .objectStore("purchases")
+                    .getAll().onsuccess = (e) => {
+                    e.target.result.forEach((item) => {
+                        list.innerHTML += `<tr class="border-b"><td>${item.name}</td><td>${item.price} kr</td></tr>`;
+                    });
+                };
+            }
+        </script>
+    </body>
+</html>
