@@ -1,166 +1,132 @@
 <!DOCTYPE html>
 <html lang="sv">
-    <head>
-        <meta charset="UTF-8" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-        />
-        <title>Budget Skanner - Pro v2</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-        <script src="https://unpkg.com/@zxing/library@latest"></script>
-        <style>
-            #video {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                border-radius: 24px;
-            }
-            .scanner-laser {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 80%;
-                height: 1px;
-                background: rgba(239, 68, 68, 0.8);
-                box-shadow: 0 0 10px 2px rgba(239, 68, 68, 0.5);
-                z-index: 20;
-                animation: scan 2s infinite;
-            }
-            @keyframes scan {
-                0%,
-                100% {
-                    top: 30%;
-                }
-                50% {
-                    top: 70%;
-                }
-            }
-        </style>
-    </head>
-    <body
-        class="bg-[#0f172a] text-slate-200 min-h-screen flex flex-col font-sans"
-    >
-        <div class="max-w-md mx-auto w-full p-6 space-y-6">
-            <header class="space-y-1 text-center">
-                <h1 class="text-3xl font-extrabold text-white">
-                    Budget Skanner
-                </h1>
-                <div
-                    id="connection-status"
-                    class="text-[10px] uppercase tracking-widest text-slate-500 italic"
-                >
-                    Offline
-                </div>
-            </header>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Budget Skanner - Pro v3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <style>
+        #video { width: 100%; height: 100%; object-fit: cover; border-radius: 24px; }
+        .scanner-container { position: relative; aspect-ratio: 1/1; }
+        .laser {
+            position: absolute; top: 50%; left: 10%; right: 10%; height: 2px;
+            background: #ef4444; box-shadow: 0 0 10px #ef4444;
+            z-index: 30; animation: scan 2s infinite ease-in-out;
+        }
+        @keyframes scan { 0%, 100% { top: 30%; } 50% { top: 70%; } }
+    </style>
+</head>
+<body class="bg-[#0f172a] text-slate-200 min-h-screen p-6 font-sans">
 
-            <div
-                id="setup-panel"
-                class="bg-slate-800/50 border border-slate-700 p-6 rounded-3xl backdrop-blur-sm shadow-2xl"
-            >
-                <input
-                    id="master-id-input"
-                    type="text"
-                    value="lagerstigen-11"
-                    class="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 mb-4 text-blue-400 font-mono outline-none"
-                />
-                <button
-                    onclick="connectToMaster()"
-                    class="w-full bg-blue-600 py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-all text-lg"
-                >
-                    Anslut till Master
-                </button>
-            </div>
+    <div class="max-w-md mx-auto space-y-6">
+        <header class="text-center">
+            <h1 class="text-3xl font-bold text-white tracking-tight">Budget Skanner</h1>
+            <p id="connection-status" class="text-[10px] text-slate-500 uppercase tracking-widest mt-1 italic">Väntar...</p>
+        </header>
 
-            <div id="scanner-panel" class="hidden space-y-6">
-                <div
-                    class="relative bg-black rounded-[32px] overflow-hidden shadow-2xl border-4 border-slate-800 aspect-square"
-                >
-                    <video id="video"></video>
-                    <div class="scanner-laser"></div>
-                    <div
-                        class="absolute inset-10 border-2 border-white/20 rounded-xl pointer-events-none"
-                    ></div>
-                </div>
-
-                <div
-                    class="bg-slate-800/80 p-6 rounded-3xl border border-slate-700 text-center"
-                >
-                    <div
-                        id="result-display"
-                        class="text-2xl font-mono font-bold text-green-400"
-                    >
-                        Söker streckkod...
-                    </div>
-                </div>
-
-                <button
-                    onclick="location.reload()"
-                    class="w-full py-2 text-slate-500 text-sm"
-                >
-                    Starta om
-                </button>
-            </div>
+        <div id="setup-panel" class="bg-slate-800/50 p-6 rounded-3xl border border-slate-700">
+            <input id="master-id-input" type="text" value="lagerstigen-11" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 mb-4 text-blue-400 font-mono outline-none">
+            <button onclick="connectToMaster()" class="w-full bg-blue-600 py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-all text-lg">Anslut</button>
         </div>
 
-        <script>
-            let peer;
-            let conn;
-            const codeReader = new ZXing.BrowserMultiFormatReader();
-            const statusEl = document.getElementById("connection-status");
+        <div id="scanner-panel" class="hidden space-y-4">
+            <div class="scanner-container bg-black rounded-[32px] overflow-hidden border-4 border-slate-800 shadow-2xl">
+                <video id="video"></video>
+                <div class="laser"></div>
+                <button id="torch-btn" onclick="toggleTorch()" class="absolute bottom-4 right-4 bg-white/10 backdrop-blur-md p-4 rounded-full border border-white/20 z-40 hidden">
+                    🔦
+                </button>
+            </div>
+            
+            <div class="bg-slate-800/80 p-6 rounded-3xl border border-slate-700 text-center shadow-xl">
+                <div id="result-display" class="text-2xl font-mono font-bold text-green-400">Söker kod...</div>
+            </div>
 
-            peer = new Peer({
-                config: {
-                    iceServers: [{ url: "stun:stun.l.google.com:19302" }],
-                },
+            <div class="flex gap-2">
+                <input id="manual-code" type="number" placeholder="Skriv EAN manuellt" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm outline-none">
+                <button onclick="sendManualCode()" class="bg-slate-700 px-6 rounded-xl font-bold text-sm uppercase">Sänd</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let peer;
+        let conn;
+        let videoTrack;
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        const statusEl = document.getElementById('connection-status');
+
+        peer = new Peer({ config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] } });
+
+        function connectToMaster() {
+            const masterId = document.getElementById('master-id-input').value;
+            statusEl.innerText = "Söker master...";
+            conn = peer.connect(masterId);
+
+            conn.on('open', () => {
+                statusEl.innerText = "ANSLUTEN ✅";
+                document.getElementById('setup-panel').classList.add('hidden');
+                document.getElementById('scanner-panel').classList.remove('hidden');
+                startScanning();
+            });
+        }
+
+        async function startScanning() {
+            try {
+                const videoElement = document.getElementById('video');
+                const result = await codeReader.decodeFromVideoDevice(undefined, 'video', (result, err) => {
+                    if (result) {
+                        handleMatch(result.text);
+                    }
+                });
+                
+                // Försök hämta videotrack för lampan
+                const stream = videoElement.srcObject;
+                if (stream) {
+                    videoTrack = stream.getVideoTracks()[0];
+                    const capabilities = videoTrack.getCapabilities();
+                    if (capabilities.torch) {
+                        document.getElementById('torch-btn').classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                console.error("Scanning error:", err);
+            }
+        }
+
+        function handleMatch(code) {
+            document.getElementById('result-display').innerText = code;
+            if (navigator.vibrate) navigator.vibrate(150);
+            
+            conn.send({
+                name: "Vara " + code.slice(-4),
+                barcode: code,
+                price: 0,
+                timestamp: new Date().toISOString()
             });
 
-            function connectToMaster() {
-                const masterId =
-                    document.getElementById("master-id-input").value;
-                statusEl.innerText = "Söker master...";
-                conn = peer.connect(masterId);
+            codeReader.reset();
+            setTimeout(startScanning, 2500);
+        }
 
-                conn.on("open", () => {
-                    statusEl.innerText = "ANSLUTEN ✅";
-                    document
-                        .getElementById("setup-panel")
-                        .classList.add("hidden");
-                    document
-                        .getElementById("scanner-panel")
-                        .classList.remove("hidden");
-                    startScanning();
+        async function toggleTorch() {
+            if (videoTrack) {
+                const currentSettings = videoTrack.getSettings();
+                await videoTrack.applyConstraints({
+                    advanced: [{ torch: !currentSettings.torch }]
                 });
             }
+        }
 
-            function startScanning() {
-                codeReader.decodeFromVideoDevice(
-                    null,
-                    "video",
-                    (result, err) => {
-                        if (result) {
-                            const code = result.text;
-                            document.getElementById(
-                                "result-display"
-                            ).innerText = code;
-                            if (navigator.vibrate) navigator.vibrate(150);
-
-                            conn.send({
-                                name: "Vara " + code.slice(-4),
-                                barcode: code,
-                                price: 0,
-                                timestamp: new Date().toISOString(),
-                            });
-
-                            // Pausa kort efter lyckad skanning
-                            codeReader.reset();
-                            setTimeout(startScanning, 2000);
-                        }
-                    }
-                );
+        function sendManualCode() {
+            const code = document.getElementById('manual-code').value;
+            if (code) {
+                handleMatch(code);
+                document.getElementById('manual-code').value = "";
             }
-        </script>
-    </body>
+        }
+    </script>
+</body>
 </html>
