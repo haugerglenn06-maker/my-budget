@@ -3,44 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Budget Klient - Skanner</title>
+    <title>Budget Skanner - Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <style>
-        #interactive video, #interactive canvas { width: 100%; height: auto; border-radius: 12px; }
-        .drawingBuffer { position: absolute; top: 0; left: 0; }
+        /* Design-fixar för att matcha bilden */
+        #interactive video, #interactive canvas { 
+            width: 100%; 
+            height: auto; 
+            border-radius: 12px;
+        }
+        .drawingBuffer { position: absolute; top: 0; left: 0; z-index: 10; }
+        
+        /* Siktet/Rutan i mitten */
+        .scanner-laser {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 40%;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+            pointer-events: none;
+            z-index: 20;
+        }
     </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen flex flex-col p-4">
+<body class="bg-[#0f172a] text-slate-200 min-h-screen flex flex-col font-sans">
 
-    <div class="max-w-md mx-auto w-full space-y-6">
-        <header class="text-center">
-            <h1 class="text-2xl font-bold text-blue-400">Budget Skanner</h1>
-            <div id="connection-status" class="text-xs text-yellow-500">Ansluter till nätverk...</div>
+    <div class="max-w-md mx-auto w-full p-6 space-y-6">
+        <header class="space-y-1">
+            <h1 class="text-3xl font-extrabold tracking-tight text-white">Budget Skanner</h1>
+            <div id="connection-status" class="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-widest">
+                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                Väntar på nätverk...
+            </div>
         </header>
 
-        <div id="setup-panel" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-            <label class="block text-sm font-medium text-slate-400 mb-2">Master ID från datorn:</"label>
-            <input id="master-id-input" type="text" value="lagerstigen-11" 
-                   class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 mb-4 text-blue-400 font-mono">
-            <button onclick="connectToMaster()" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold transition-all">
-                Koppla till Datorn
-            </button>
+        <div id="setup-panel" class="bg-slate-800/50 border border-slate-700 p-6 rounded-3xl backdrop-blur-sm shadow-2xl">
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-semibold text-slate-400 uppercase ml-1">Master ID från dator</label>
+                    <input id="master-id-input" type="text" value="lagerstigen-11" 
+                           class="w-full bg-slate-900/80 border border-slate-600 rounded-xl p-4 mt-1 text-blue-400 font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                </div>
+                <button onclick="connectToMaster()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-all text-lg">
+                    Koppla till Datorn
+                </button>
+            </div>
         </div>
 
-        <div id="scanner-panel" class="hidden space-y-4">
-            <div id="interactive" class="relative bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-blue-500/30">
-                </div>
+        <div id="scanner-panel" class="hidden space-y-6 animate-in fade-in duration-500">
+            <div id="interactive" class="relative bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-700 aspect-video">
+                <div class="scanner-laser"></div>
+            </div>
             
-            <div class="bg-slate-800 p-4 rounded-xl text-center">
-                <p class="text-slate-400 text-xs uppercase tracking-widest mb-1">Senaste fynd</p>
-                <div id="result-display" class="text-xl font-mono text-green-400">Sikta på en streckkod</div>
+            <div class="bg-slate-800/80 backdrop-blur-md p-6 rounded-3xl border border-slate-700 shadow-xl text-center">
+                <p class="text-slate-500 text-[10px] uppercase font-bold tracking-tighter mb-1">Status: Aktiv avkodning</p>
+                <div id="result-display" class="text-2xl font-mono font-bold text-green-400 tracking-wider">
+                    Sikta på koden...
+                </div>
             </div>
 
-            <div class="flex gap-2">
-                <button onclick="location.reload()" class="flex-1 bg-slate-700 py-3 rounded-lg text-sm">Nollställ</button>
-            </div>
+            <button onclick="location.reload()" class="w-full py-4 text-slate-400 font-medium hover:text-white transition-colors">
+                Avbryt och starta om
+            </button>
         </div>
     </div>
 
@@ -49,29 +79,25 @@
         let conn;
         const statusEl = document.getElementById('connection-status');
 
-        // Initiera PeerJS direkt för att vara redo
         peer = new Peer({
             config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] }
         });
 
-        peer.on('open', () => statusEl.innerText = "Redo att ansluta...");
+        peer.on('open', () => {
+            statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500"></span> Redo att koppla';
+        });
 
         function connectToMaster() {
             const masterId = document.getElementById('master-id-input').value;
-            statusEl.innerText = "Försöker nå master...";
+            statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span> Söker master...';
             
             conn = peer.connect(masterId);
 
             conn.on('open', () => {
-                statusEl.innerText = "ANSLUTEN ✅";
-                statusEl.className = "text-xs text-green-500";
+                statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500"></span> Ansluten till Master ✅';
                 document.getElementById('setup-panel').classList.add('hidden');
                 document.getElementById('scanner-panel').classList.remove('hidden');
                 startScanner();
-            });
-
-            conn.on('error', (err) => {
-                alert("Kunde inte ansluta: " + err);
             });
         }
 
@@ -81,35 +107,43 @@
                     name: "Live",
                     type: "LiveStream",
                     target: document.querySelector('#interactive'),
-                    constraints: { facingMode: "environment" }
+                    constraints: {
+                        width: { min: 640, ideal: 1280 },
+                        height: { min: 480, ideal: 720 },
+                        facingMode: "environment"
+                    },
                 },
-                decoder: { readers: ["ean_reader"] }
+                locator: { patchSize: "medium", halfSample: true },
+                decoder: { 
+                    readers: ["ean_reader", "ean_8_reader", "code_128_reader"] 
+                },
+                locate: true
             }, (err) => {
-                if (err) { alert("Kamerafel: " + err); return; }
+                if (err) { console.error(err); return; }
                 Quagga.start();
             });
 
             Quagga.onDetected((data) => {
                 const code = data.codeResult.code;
+                if (!code) return;
+
                 document.getElementById('result-display').innerText = code;
-                
-                // Vibrera mobilen (om stöds)
                 if (navigator.vibrate) navigator.vibrate(100);
 
-                // Skicka till Master
+                // Skicka data
                 conn.send({
-                    name: "Skannad vara",
+                    name: "Vara " + code.substring(code.length - 4),
                     barcode: code,
                     price: 0,
                     timestamp: new Date().toISOString()
                 });
 
-                // Pausa 2 sekunder för att undvika dubbel-skanning
+                // Pausa för att bekräfta skanning
                 Quagga.pause();
                 setTimeout(() => {
                     document.getElementById('result-display').innerText = "Sikta på nästa...";
                     Quagga.resume();
-                }, 2000);
+                }, 2500);
             });
         }
     </script>
