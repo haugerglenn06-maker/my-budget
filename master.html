@@ -3,23 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Budget Master - Lagerstigen 11</title>
+    <title>Budget Master - ICA Odenhallen</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body class="bg-slate-900 text-white p-4 md:p-8 font-sans">
     <div class="max-w-5xl mx-auto">
-        <header class="flex flex-col md:flex-row justify-between items-center mb-8 bg-slate-800 p-8 rounded-[2rem] border border-slate-700 shadow-2xl">
-            <div class="flex-1">
-                <h1 id="main-title" class="text-3xl font-black text-white tracking-tight">
+        <header class="flex flex-col md:flex-row justify-between items-start mb-8 bg-slate-800 p-8 rounded-[2rem] border border-slate-700 shadow-2xl relative overflow-hidden">
+            <div class="z-10">
+                <h1 class="text-3xl font-black text-white tracking-tight">
                     Budget Master <span id="total-sum" class="text-green-500 ml-4">0.00 kr</span>
                 </h1>
-                <p class="text-slate-400 mt-1">ID: <span class="font-mono text-blue-400">lagerstigen-11</span></p>
+                <p class="text-slate-400 mt-1 flex items-center gap-2">
+                    <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    ICA Supermarket Odenhallen, Odensbacken
+                </p>
+                <p class="text-[10px] text-slate-500 font-mono mt-2 uppercase tracking-widest">ID: lagerstigen-11</p>
             </div>
             
-            <div class="flex flex-col items-end gap-3 mt-4 md:mt-0">
-                <div id="status-badge" class="bg-slate-700 px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest text-slate-400 border border-slate-600">
-                    Väntar på anslutning...
+            <div class="flex flex-col items-end gap-3 mt-4 md:mt-0 z-10">
+                <div id="status-badge" class="bg-slate-700 px-6 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-400 border border-slate-600">
+                    Väntar på klient...
                 </div>
                 <button onclick="clearAllPurchases()" class="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors tracking-widest bg-red-500/10 px-4 py-1 rounded-lg border border-red-500/20">
                     Rensa lista 🗑️
@@ -28,30 +32,25 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-1 space-y-6">
+            <div class="lg:col-span-1">
                 <div class="bg-slate-800 p-6 rounded-[2rem] border border-slate-700 shadow-xl h-[400px] flex flex-col">
-                    <h2 class="font-bold mb-4 text-slate-500 uppercase text-xs tracking-widest">Systemlogg</h2>
-                    <div id="log" class="text-[10px] font-mono space-y-2 overflow-y-auto flex-1 text-slate-400">
-                        <div>> System redo.</div>
-                    </div>
+                    <h2 class="font-bold mb-4 text-slate-500 uppercase text-[10px] tracking-widest">Händelseförlopp</h2>
+                    <div id="log" class="text-[10px] font-mono space-y-2 overflow-y-auto flex-1 text-slate-400 scrollbar-hide"></div>
                 </div>
             </div>
 
             <div class="lg:col-span-2 bg-slate-800 p-8 rounded-[2rem] border border-slate-700 shadow-xl min-h-[600px]">
-                <h2 class="font-bold mb-6 text-slate-500 uppercase text-xs tracking-widest">Inköpslista</h2>
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="font-bold text-slate-500 uppercase text-[10px] tracking-widest">Inköpslista</h2>
+                    <span class="text-[10px] text-slate-600 italic">Klicka på 🔍 för att kolla pris på ICA</span>
+                </div>
+                
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-separate border-spacing-y-3">
-                        <thead>
-                            <tr class="text-slate-500 text-xs uppercase tracking-wider">
-                                <th class="px-4 pb-2">Vara</th>
-                                <th class="px-4 pb-2">EAN-Kod</th>
-                                <th class="px-4 pb-2 text-right">Pris</th>
-                            </tr>
-                        </thead>
                         <tbody id="purchase-list"></tbody>
                     </table>
-                    <div id="empty-state" class="text-center py-20 text-slate-600 hidden">
-                        Inga varor skannade ännu.
+                    <div id="empty-state" class="text-center py-20 text-slate-600 italic text-sm">
+                        Inga varor skannade. Starta kameran på mobilen!
                     </div>
                 </div>
             </div>
@@ -60,61 +59,71 @@
 
     <script>
         let db;
-        const request = indexedDB.open("BudgetDB", 1);
+        const request = indexedDB.open("BudgetDB", 2);
+
         request.onupgradeneeded = e => {
             db = e.target.result;
-            db.createObjectStore("purchases", { keyPath: "id", autoIncrement: true });
+            if (!db.objectStoreNames.contains("purchases")) db.createObjectStore("purchases", { keyPath: "id", autoIncrement: true });
+            if (!db.objectStoreNames.contains("product_catalog")) db.createObjectStore("product_catalog", { keyPath: "barcode" });
         };
+
         request.onsuccess = e => { db = e.target.result; renderPurchases(); };
 
-        const peer = new Peer('lagerstigen-11', {
-            config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] }
-        });
+        const peer = new Peer('lagerstigen-11', { config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] } });
 
         peer.on('connection', conn => {
-            const badge = document.getElementById('status-badge');
-            badge.innerText = "Klient Online";
-            badge.className = "bg-green-500/10 px-6 py-2 rounded-full text-xs font-bold text-green-500 border border-green-500/50";
+            updateStatus("Ansluten", "green");
             conn.on('data', async (data) => {
-                log(`Inkommande: ${data.barcode}`);
+                log(`Skannade EAN: ${data.barcode}`);
                 await processItem(data);
             });
         });
 
         async function processItem(item) {
-            try {
-                const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${item.barcode}.json`);
-                const json = await res.json();
-                item.name = (json.status === 1) ? json.product.product_name : "Okänd (" + item.barcode.slice(-4) + ")";
-            } catch (e) { item.name = "Okänd vara"; }
-
+            const catalogItem = await getFromCatalog(item.barcode);
+            if (catalogItem) {
+                item.name = catalogItem.name;
+                item.price = catalogItem.price;
+            } else {
+                try {
+                    const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${item.barcode}.json`);
+                    const json = await res.json();
+                    item.name = (json.status === 1) ? json.product.product_name : "Okänd vara";
+                } catch (e) { item.name = "Okänd vara"; }
+                item.price = 0;
+            }
             const tx = db.transaction("purchases", "readwrite");
             tx.objectStore("purchases").add(item);
             tx.oncomplete = renderPurchases;
         }
 
+        function getFromCatalog(barcode) {
+            return new Promise(resolve => {
+                const req = db.transaction("product_catalog").objectStore("product_catalog").get(barcode);
+                req.onsuccess = () => resolve(req.result);
+            });
+        }
+
         function renderPurchases() {
             const list = document.getElementById('purchase-list');
-            const emptyState = document.getElementById('empty-state');
             list.innerHTML = "";
             db.transaction("purchases").objectStore("purchases").getAll().onsuccess = e => {
                 const items = e.target.result;
-                if(items.length === 0) emptyState.classList.remove('hidden');
-                else emptyState.classList.add('hidden');
-
+                document.getElementById('empty-state').style.display = items.length ? 'none' : 'block';
                 items.sort((a, b) => b.id - a.id).forEach(item => {
                     const row = document.createElement('tr');
                     row.className = "bg-slate-900/50 hover:bg-slate-700/30 transition-all rounded-xl";
                     row.innerHTML = `
                         <td class="px-4 py-4 rounded-l-xl">
-                            <input type="text" value="${item.name}" onchange="updateItem(${item.id}, 'name', this.value)" class="bg-transparent border-none focus:text-blue-400 w-full outline-none font-medium text-slate-200">
+                            <input type="text" value="${item.name}" onchange="updateItem(${item.id}, 'name', this.value, '${item.barcode}')" class="bg-transparent border-none focus:text-blue-400 w-full outline-none font-medium">
                         </td>
-                        <td class="px-4 py-4 font-mono text-[10px] text-slate-600">${item.barcode}</td>
+                        <td class="px-2 py-4">
+                            <a href="https://www.ica.se/handla/sok/?q=${item.barcode}" target="_blank" class="p-2 hover:bg-slate-700 rounded-lg transition-colors inline-block text-slate-500 hover:text-white" title="Sök på ICA">
+                                🔍
+                            </a>
+                        </td>
                         <td class="px-4 py-4 text-right rounded-r-xl">
-                            <div class="flex justify-end items-center gap-2">
-                                <input type="number" step="0.01" value="${item.price || 0}" onchange="updateItem(${item.id}, 'price', this.value)" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 w-24 text-right text-blue-400 font-bold outline-none">
-                                <span class="text-slate-500 text-xs uppercase">kr</span>
-                            </div>
+                            <input type="number" step="0.01" value="${item.price || 0}" onchange="updateItem(${item.id}, 'price', this.value, '${item.barcode}')" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 w-24 text-right text-blue-400 font-bold outline-none">
                         </td>`;
                     list.appendChild(row);
                 });
@@ -122,25 +131,29 @@
             };
         }
 
-        function updateItem(id, field, value) {
-            const transaction = db.transaction("purchases", "readwrite");
-            const store = transaction.objectStore("purchases");
-            store.get(id).onsuccess = e => {
+        async function updateItem(id, field, value, barcode) {
+            const tx = db.transaction(["purchases", "product_catalog"], "readwrite");
+            const purchaseStore = tx.objectStore("purchases");
+            purchaseStore.get(id).onsuccess = e => {
                 const item = e.target.result;
                 item[field] = field === 'price' ? parseFloat(value) : value;
-                store.put(item);
-                renderPurchases();
+                purchaseStore.put(item);
+                const catalogStore = tx.objectStore("product_catalog");
+                catalogStore.get(barcode).onsuccess = ev => {
+                    const catItem = ev.target.result || { barcode: barcode };
+                    catItem[field] = item[field];
+                    if (!catItem.name) catItem.name = item.name;
+                    catalogStore.put(catItem);
+                };
             };
+            tx.oncomplete = renderPurchases;
         }
 
         function clearAllPurchases() {
-            if (confirm("Är du säker på att du vill rensa hela listan? Detta går inte att ångra.")) {
-                const transaction = db.transaction("purchases", "readwrite");
-                transaction.objectStore("purchases").clear();
-                transaction.oncomplete = () => {
-                    log("Listan har rensats.");
-                    renderPurchases();
-                };
+            if (confirm("Rensa listan? Produktminnet sparas.")) {
+                const tx = db.transaction("purchases", "readwrite");
+                tx.objectStore("purchases").clear();
+                tx.oncomplete = renderPurchases;
             }
         }
 
@@ -149,11 +162,15 @@
             document.getElementById('total-sum').innerText = total.toFixed(2) + " kr";
         }
 
+        function updateStatus(text, color) {
+            const b = document.getElementById('status-badge');
+            b.innerText = text;
+            b.className = `bg-${color}-500/10 px-6 py-2 rounded-full text-[10px] font-bold text-${color}-500 border border-${color}-500/50 uppercase tracking-widest`;
+        }
+
         function log(msg) {
             const el = document.getElementById('log');
-            const div = document.createElement('div');
-            div.innerText = `> [${new Date().toLocaleTimeString()}] ${msg}`;
-            el.appendChild(div);
+            el.innerHTML += `<div class="py-1 border-b border-slate-700/50">> [${new Date().toLocaleTimeString()}] ${msg}</div>`;
             el.scrollTop = el.scrollHeight;
         }
     </script>
